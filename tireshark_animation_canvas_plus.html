@@ -1,0 +1,233 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Tire Shark — Canvas Animation (Enhanced)</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{background:#0b1220;display:grid;place-items:center;color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,sans-serif}
+  #wrap{position:relative}
+  .label{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-weight:700}
+  .sub{font-weight:500;font-size:12px;color:#cbd5e1}
+  #controls{position:fixed;right:12px;bottom:12px}
+  button{background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:8px 12px;cursor:pointer}
+  button:hover{filter:brightness(1.15)}
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="c" width="800" height="450" aria-label="Tire Shark animation canvas"></canvas>
+    <div class="label"><div>Tire Shark</div><div class="sub">Loading…</div></div>
+  </div>
+  <div id="controls"><button id="replay">Replay</button></div>
+<script>
+(function(){
+  const W=800,H=450;
+  const BITE_AT=1400, FADE_AT=2000, END_AT=2400;
+  const ctx = document.getElementById('c').getContext('2d');
+  const replayBtn = document.getElementById('replay');
+  let start=0, bitten=false, stop=false, ripples=[], bubbles=[];
+
+  function rand(a,b){return a+Math.random()*(b-a);}
+  function lerp(a,b,t){return a+(b-a)*t;}
+
+  function drawBG(t){
+    // gradient
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#051e3c'); g.addColorStop(1,'#000000');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // light rays
+    ctx.save();
+    ctx.globalAlpha=0.06+0.02*Math.sin(t*0.0017);
+    for(let i=0;i<4;i++){
+      const x= (i*220 + (t*0.02)%220) - 200;
+      ctx.beginPath();
+      ctx.moveTo(x,0);
+      ctx.lineTo(x+140,0);
+      ctx.lineTo(x+40,H);
+      ctx.lineTo(x-100,H);
+      ctx.closePath();
+      ctx.fillStyle='#9dd6ff';
+      ctx.fill();
+    }
+    ctx.restore();
+    // distant fish silhouettes
+    ctx.save();
+    ctx.globalAlpha=0.08;
+    ctx.fillStyle='#0e223e';
+    for(let i=0;i<6;i++){
+      const fx = (i*140 + (t*0.03)% (W+200)) - 100;
+      const fy = 80 + (i%3)*90 + 10*Math.sin((t*0.002)+i);
+      ctx.beginPath();
+      ctx.ellipse(fx,fy,18,6,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.beginPath(); // tail
+      ctx.moveTo(fx-20,fy);
+      ctx.lineTo(fx-34,fy-5);
+      ctx.lineTo(fx-34,fy+5);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawTire(cx,cy,bitten,t){
+    ctx.save();
+    // gentle rotation
+    const rot = Math.sin(t*0.0015)*0.07;
+    ctx.translate(cx,cy);
+    ctx.rotate(rot);
+    ctx.translate(-cx,-cy);
+
+    ctx.lineWidth=34;
+    ctx.strokeStyle='#0f172a';
+    ctx.beginPath();
+    ctx.arc(cx,cy,90,0,Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle='#1f2937';
+    ctx.beginPath(); ctx.arc(cx,cy,52,0,Math.PI*2); ctx.fill();
+    // sheen
+    const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,52);
+    grd.addColorStop(0,'rgba(255,255,255,0.15)'); grd.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(cx,cy,52,0,Math.PI*2); ctx.fill();
+    // lugs
+    ctx.fillStyle='#0ea5e9';
+    for(let i=0;i<5;i++){const ang=i*72*Math.PI/180; const x=cx+28*Math.cos(ang); const y=cy+28*Math.sin(ang); ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();}
+    // bite hole
+    if(bitten){ ctx.globalCompositeOperation='destination-out'; ctx.beginPath(); ctx.arc(cx+60,cy,30,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation='source-over'; }
+    ctx.restore();
+  }
+
+  function drawShark(x,y,open,t){
+    ctx.save();
+    // body
+    ctx.fillStyle='#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(x, y+20);
+    ctx.bezierCurveTo(x+80,y-20, x+200,y-40, x+300,y-50);
+    ctx.bezierCurveTo(x+315,y-15, x+315,y+25, x+300,y+60);
+    ctx.bezierCurveTo(x+200,y+50, x+80,y+40, x,y+20);
+    ctx.fill();
+    // tail (wags)
+    const tailAng = Math.sin(t*0.012)*0.35;
+    ctx.save();
+    ctx.translate(x, y+20);
+    ctx.rotate(tailAng);
+    ctx.beginPath();
+    ctx.moveTo(-18, -8);
+    ctx.lineTo(-48, -16);
+    ctx.lineTo(-50,  16);
+    ctx.lineTo(-18,  8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // dorsal fin wiggle
+    const finY = y-30 + Math.sin(t*0.01)*2;
+    ctx.beginPath();
+    ctx.moveTo(x+120, finY);
+    ctx.lineTo(x+150, finY-24);
+    ctx.lineTo(x+162, finY);
+    ctx.closePath();
+    ctx.fill();
+
+    // eye
+    ctx.fillStyle='#0ea5e9';
+    ctx.beginPath(); ctx.arc(x+200, y-5, 7, 0, Math.PI*2); ctx.fill();
+
+    // mouth group
+    ctx.fillStyle='#0b1220';
+    // upper jaw
+    ctx.save();
+    ctx.translate(x+225,y+0);
+    ctx.rotate(open? -12*Math.PI/180 : 0);
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(88,-28); ctx.lineTo(120,-12); ctx.lineTo(28,8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // lower jaw
+    ctx.save();
+    ctx.translate(x+225,y+0);
+    ctx.rotate(open? 12*Math.PI/180 : 0);
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(28,12); ctx.lineTo(120,0); ctx.lineTo(88,24); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // bubble trail
+    if(Math.random()<0.7){
+      bubbles.push({x:x+210, y:y-2+rand(-4,4), r:rand(2,4), vy:rand(-18,-10), vx:rand(-4,-1), a:0.9});
+    }
+    ctx.restore();
+  }
+
+  function updateBubbles(dt){
+    ctx.save();
+    for(let i=bubbles.length-1;i>=0;i--){
+      const b=bubbles[i];
+      b.y += b.vy*dt; b.x += b.vx*dt; b.a -= 0.25*dt; b.r += 6*dt;
+      if(b.a<=0 || b.y< -20){ bubbles.splice(i,1); continue; }
+      ctx.globalAlpha=Math.max(b.a,0);
+      ctx.strokeStyle='rgba(156, 214, 255, 0.8)';
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function updateRipples(dt){
+    ctx.save();
+    for(let i=ripples.length-1;i>=0;i--){
+      const r=ripples[i];
+      r.r += 120*dt; r.a -= 0.6*dt;
+      if(r.a<=0){ ripples.splice(i,1); continue; }
+      ctx.globalAlpha=r.a;
+      ctx.strokeStyle='rgba(255,255,255,0.6)';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function frame(ts){
+    if(!start) start=ts;
+    const t=ts-start;           // ms since start
+    const dt = Math.min(1/30, (t - (frame._lt||t))/1000); // seconds
+    frame._lt = t;
+
+    if(stop) return;
+    drawBG(t);
+
+    const cx=W/2+40, cy=H/2;
+    const floatY = Math.sin(t*0.0028*1000)*6;
+    const progress=Math.min(t/BITE_AT,1);
+    const sharkX = lerp(-260, cx-280, progress);
+    drawTire(cx,cy+floatY, bitten, t);
+    drawShark(sharkX, cy-80, !bitten, t);
+
+    if(!bitten && t>=BITE_AT){
+      bitten=true;
+      ripples.push({x: cx+60, y: cy+floatY, r: 4, a: 1});
+    }
+
+    if(t>=FADE_AT){
+      const k=Math.min((t-FADE_AT)/(END_AT-FADE_AT),1);
+      ctx.fillStyle='rgba(0,0,0,'+k.toFixed(3)+')';
+      ctx.fillRect(0,0,W,H);
+    }
+
+    updateBubbles(dt);
+    updateRipples(dt);
+
+    if(t>=END_AT){ stop=true; return; }
+    requestAnimationFrame(frame);
+  }
+
+  function start(){
+    start=0; bitten=false; stop=false; ripples=[]; bubbles=[]; requestAnimationFrame(frame);
+  }
+  replayBtn.addEventListener('click', start);
+  start();
+})();
+</script>
+</body>
+</html>
